@@ -44,6 +44,11 @@ public class TestClient {
         System.out.println("per Josep Mulet (c) 2011            ");
         System.out.println("====================================");
         
+        //Check client
+        System.out.println("Comparison:"+client.checkDatabases(2013));
+        System.out.println("Fix:"+client.fixDatabases());
+        
+        System.exit(0);
    
         ArrayList<MensajesListas> mensajesListas = client.getMensajesCollection().getMensajesListas();
         for(MensajesListas ml: mensajesListas)

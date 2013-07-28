@@ -4,6 +4,9 @@
  */
 package org.iesapp.clients.sgd7;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -52,7 +55,10 @@ import org.iesapp.clients.sgd7.profesores.Profesores;
 import org.iesapp.clients.sgd7.profesores.ProfesoresCollection;
 import org.iesapp.clients.sgd7.reports.InformesSGD;
 import org.iesapp.clients.sgd7.tareas.TareasCollection;
+import org.iesapp.database.Compare;
+import org.iesapp.database.CompareIncidence;
 import org.iesapp.database.MyDatabase;
+import org.iesapp.database.ScriptRunner;
 import org.iesapp.util.Version;
 
 /**
@@ -86,6 +92,9 @@ public class SgdClient implements IClient{
     private InformesSGD informesSGD;
     private final String configDB;
     protected final String currentDBPrefix;
+    private int checkedYear;
+    private ArrayList<CompareIncidence> compareStructure2;
+    private ArrayList<CompareIncidence> compareStructure1;
    
     public SgdClient(MyDatabase mysql, MyDatabase sgd, int anyAcademic, String currentDBPrefix, String configDB, String host, String hostIp)
     {
@@ -495,9 +504,6 @@ public class SgdClient implements IClient{
     }
 
     public String getClientVersion() {
-        
-        System.out.println(UUID.randomUUID()+":");
-        System.out.println("Newtons's Law 65");
                 
         Version annotation = this.getClass().getAnnotation(Version.class);
         if(annotation!=null)
@@ -547,6 +553,192 @@ public class SgdClient implements IClient{
     public MyDatabase getPlusDb() {
         //return sgd;
         return mysql;
+    }
+
+    @Override
+    public String checkDatabases(int year) {
+        
+        //Create a clone of database connection
+        MyDatabase sgdClone = new MyDatabase(sgd.getConBean());
+        boolean connect = sgdClone.connect();
+        if(!connect)
+        {
+            return "ERROR: no database connection";
+        }
+        
+        String result="";
+        this.checkedYear = year;
+        this.compareStructure1 = null;
+        this.compareStructure2 = null;
+        
+        if(configDB!=null && !configDB.isEmpty())
+        {
+        boolean doesSchemaExists = sgdClone.doesSchemaExists(configDB);
+        if(!doesSchemaExists)
+        {
+            System.out.println("Creating configDB");
+            sgdClone.executeUpdate("CREATE DATABASE "+configDB);
+            sgdClone.setCatalog(configDB);
+            InputStream istream = getClass().getResourceAsStream("/org/iesapp/clients/sgd7/sql/config.sql");
+            ScriptRunner srun = new ScriptRunner(sgdClone.getConnection(), true, false);
+            try {
+                srun.runScript(new InputStreamReader(istream));
+            } catch (IOException ex) {
+                Logger.getLogger(SgdClient.class.getName()).log(Level.SEVERE, null, ex);
+            } catch (SQLException ex) {
+                Logger.getLogger(SgdClient.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }
+        else
+        {
+            //Check it against script
+            String tmpDB = "tmp"+Math.round(Math.random()*1e8);
+            sgdClone.executeUpdate("CREATE DATABASE "+tmpDB);
+            System.out.println("Creating "+ tmpDB);
+            sgdClone.setCatalog(tmpDB);
+            //Create from script
+            InputStream istream = getClass().getResourceAsStream("/org/iesapp/clients/sgd7/sql/config.sql");
+            ScriptRunner srun = new ScriptRunner(sgdClone.getConnection(), false, false);
+            try {
+                srun.runScript(new InputStreamReader(istream));
+            } catch (IOException ex) {
+                Logger.getLogger(SgdClient.class.getName()).log(Level.SEVERE, null, ex);
+            } catch (SQLException ex) {
+                Logger.getLogger(SgdClient.class.getName()).log(Level.SEVERE, null, ex);
+            }
+            
+            Compare compare = new Compare(sgdClone, tmpDB, sgd, this.configDB);
+            compareStructure1 = compare.compareStructure();
+            for (CompareIncidence ci: compareStructure1)
+            {
+                result += ci.toString();
+            }
+            sgdClone.executeUpdate("DROP DATABASE "+tmpDB);
+           
+        }
+        }
+        
+        boolean doesSchemaExists = sgdClone.doesSchemaExists(currentDBPrefix+year);
+        if(!doesSchemaExists)
+        {
+            System.out.println("Creating "+ currentDBPrefix+year);
+
+            sgdClone.executeUpdate("CREATE DATABASE "+currentDBPrefix+year);
+            sgdClone.setCatalog(currentDBPrefix+year);
+            //Create from script
+            InputStream istream = getClass().getResourceAsStream("/org/iesapp/clients/sgd7/sql/cursoxxxx.sql");
+            ScriptRunner srun = new ScriptRunner(sgdClone.getConnection(), true, false);
+            try {
+                srun.runScript(new InputStreamReader(istream));
+            } catch (IOException ex) {
+                Logger.getLogger(SgdClient.class.getName()).log(Level.SEVERE, null, ex);
+            } catch (SQLException ex) {
+                Logger.getLogger(SgdClient.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }
+        else
+        {
+            //Check it with script tmp backup
+            String tmpDB = "tmp"+Math.round(Math.random()*1e8);
+            sgdClone.executeUpdate("CREATE DATABASE "+tmpDB);
+            System.out.println("Creating "+ tmpDB);
+            sgdClone.setCatalog(tmpDB);
+            //Create from script
+            InputStream istream = getClass().getResourceAsStream("/org/iesapp/clients/sgd7/sql/cursoxxxx.sql");
+            ScriptRunner srun = new ScriptRunner(sgdClone.getConnection(), false, false);
+            try {
+                srun.runScript(new InputStreamReader(istream));
+            } catch (IOException ex) {
+                Logger.getLogger(SgdClient.class.getName()).log(Level.SEVERE, null, ex);
+            } catch (SQLException ex) {
+                Logger.getLogger(SgdClient.class.getName()).log(Level.SEVERE, null, ex);
+            }
+            
+            Compare compare = new Compare(sgdClone, tmpDB, sgd, this.currentDBPrefix+year);
+            compareStructure2 = compare.compareStructure();
+            for (CompareIncidence ci: compareStructure2)
+            {
+                result += ci.toString();
+            }
+            sgdClone.executeUpdate("DROP DATABASE "+tmpDB);
+            
+        }
+        sgdClone.close();
+        return result;
+    }
+
+    @Override
+    public String fixDatabases() {
+        if (this.compareStructure2 == null && this.compareStructure1 == null) {
+            return "ERROR: CheckDatabases must be invoked before fixDatabases";
+        }
+        //Create a clone of database connection
+        MyDatabase sgdClone = new MyDatabase(sgd.getConBean());
+        boolean connect = sgdClone.connect();
+        if (!connect) {
+            return "ERROR: no database connection";
+        }
+        
+        String result = "";
+        
+        if (this.compareStructure1 != null && !this.compareStructure1.isEmpty()) {
+            //Set up temporal database
+            //Check it with script tmp backup
+            String tmpDB = "tmp" + Math.round(Math.random() * 1e8);
+            sgdClone.executeUpdate("CREATE DATABASE " + tmpDB);
+            sgdClone.setCatalog(tmpDB);
+            //Create from script
+            InputStream istream = getClass().getResourceAsStream("/org/iesapp/clients/sgd7/sql/config.sql");
+            ScriptRunner srun = new ScriptRunner(sgdClone.getConnection(), false, false);
+            try {
+                srun.runScript(new InputStreamReader(istream));
+            } catch (IOException ex) {
+                Logger.getLogger(SgdClient.class.getName()).log(Level.SEVERE, null, ex);
+            } catch (SQLException ex) {
+                Logger.getLogger(SgdClient.class.getName()).log(Level.SEVERE, null, ex);
+            }
+
+            Compare compare = new Compare(sgdClone, tmpDB, sgd, this.configDB);
+            ArrayList<CompareIncidence> notSolved = compare.fixStructure(compareStructure1);
+
+            for (CompareIncidence ci : notSolved) {
+                result += ci.toString();
+            }
+            sgdClone.executeUpdate("DROP DATABASE " + tmpDB);
+        }
+        
+        if (this.compareStructure2 != null && !this.compareStructure2.isEmpty()) {
+            //Set up temporal database
+            //Check it with script tmp backup
+            String tmpDB = "tmp" + Math.round(Math.random() * 1e8);
+            sgdClone.executeUpdate("CREATE DATABASE " + tmpDB);
+            sgdClone.setCatalog(tmpDB);
+            //Create from script
+            InputStream istream = getClass().getResourceAsStream("/org/iesapp/clients/sgd7/sql/cursoxxxx.sql");
+            ScriptRunner srun = new ScriptRunner(sgdClone.getConnection(), false, false);
+            try {
+                srun.runScript(new InputStreamReader(istream));
+            } catch (IOException ex) {
+                Logger.getLogger(SgdClient.class.getName()).log(Level.SEVERE, null, ex);
+            } catch (SQLException ex) {
+                Logger.getLogger(SgdClient.class.getName()).log(Level.SEVERE, null, ex);
+            }
+
+            Compare compare = new Compare(sgdClone, tmpDB, sgd, this.currentDBPrefix + this.checkedYear);
+            ArrayList<CompareIncidence> notSolved = compare.fixStructure(compareStructure2);
+
+            for (CompareIncidence ci : notSolved) {
+                result += ci.toString();
+            }
+            sgdClone.executeUpdate("DROP DATABASE " + tmpDB);
+        }
+        
+        
+        sgdClone.close();
+        this.compareStructure1 = null;
+        this.compareStructure2 = null;
+
+        return result;
     }
 
 }

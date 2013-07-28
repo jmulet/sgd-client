@@ -4,6 +4,7 @@
  */
 package org.iesapp.clients.sgd7;
 
+import org.iesapp.clients.UClient;
 import org.iesapp.clients.sgd7.actividades.Actividad;
 import org.iesapp.clients.sgd7.actividades.ActividadAlumno;
 import org.iesapp.clients.sgd7.actividades.ActividadesCollection;
@@ -22,7 +23,7 @@ import org.iesapp.database.MyDatabase;
  *
  * @author Josep
  */
-public interface IClient extends IClientController {
+public interface IClient extends IClientController, UClient {
      public int getAnyAcademic();
      public Profesores getUser();
      
@@ -37,9 +38,9 @@ public interface IClient extends IClientController {
      public ActividadAlumno getActividadAlumno(BeanActividadesAlumno bean);
      public Actividad getActividad(BeanActividadClase bean);
 
-    public String getConfigDB();
-    public String getCurrentDBPrefix();
-    public String getPlusDbName();
-    public MyDatabase getPlusDb();
+     public String getConfigDB();
+     public String getCurrentDBPrefix();
+     public String getPlusDbName();
+     public MyDatabase getPlusDb();
      
 }
