@@ -23,7 +23,7 @@ import org.iesapp.database.MyDatabase;
  *
  * @author Josep
  */
-public interface IClient extends IClientController, UClient {
+public interface IClient extends IClientController {
      public int getAnyAcademic();
      public Profesores getUser();
      

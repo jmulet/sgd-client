@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.iesapp.clients.UClient;
 import org.iesapp.clients.sgd7.actividades.Actividad;
 import org.iesapp.clients.sgd7.actividades.ActividadAlumno;
 import org.iesapp.clients.sgd7.actividades.ActividadClase;
@@ -66,7 +67,7 @@ import org.iesapp.util.Version;
  * @author Josep
  */
 @Version(version="7.01.0065")
-public class SgdClient implements IClient{
+public class SgdClient implements IClient, UClient{
     private final MyDatabase mysql;
     private final MyDatabase sgd;
     private final int anyAcademic;
